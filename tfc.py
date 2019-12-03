@@ -1,6 +1,10 @@
 import maxflow
 import numpy as np
 import librosa as lr
+from librosa import display
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_agg import FigureCanvasAgg
+import io
 # from pathos.multiprocessing import ProcessingPool as Pool
 # import pyrubberband
 
@@ -168,6 +172,31 @@ class TFC:
 
         return new_slice
 
+    def visualize_seam(self, trans, seam):
+        """
+        Returns a visualization of a computed seam given the transition audio and seam matrix. The stft of the audio
+        must be the same dimensions as the seam.
+        :param trans:
+        :param seam:
+        :return:
+        """
+        yft = lr.amplitude_to_db(np.abs(self.stft(trans)), ref=np.max)
+        line_width = round(yft.shape[1] / 150)
+
+        for ri, row in enumerate(seam):
+            ci = next(i for i, v in enumerate(row) if v)
+            for highlight in range(max(ci-line_width, 0), min(ci+line_width, len(row))):
+                yft[ri][highlight] = 0
+
+        plt.figure(figsize=(10, 4))
+        display.specshow(yft, y_axis='log', x_axis='time', hop_length=self.parameters['n_fft']/8)
+        #plt.show()
+
+        output = io.BytesIO()
+        plt.savefig(output, format='svg')
+
+        return output
+
     def process_TFC(self, file1, file2, seconds, trim=True, loss=None):
         """
         Given two audio files computes and returns the files transitioned along a computed seam through the time-frequency
@@ -199,77 +228,9 @@ class TFC:
         print('Reconstructing audio...')
         transition = self.istft(new_slice)
 
+        print('Visualizing')
+        vis = self.visualize_seam(transition, seam)
+
         print('DONE')
-        return np.concatenate((y1[:-overlap], transition, y2[overlap:]), axis=None), transition
-
-
-tfc = TFC()
-
-final, transition = tfc.process_TFC('dj1.ogg', 'dj2.ogg', 12)
-
-tfc.write_audio('final.wav', final)
-tfc.write_audio('transition.wav', transition)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        return np.concatenate((y1[:-overlap], transition, y2[overlap:]), axis=None), transition, vis
 
