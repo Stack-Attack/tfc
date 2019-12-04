@@ -2,7 +2,7 @@ from tfc import TFC
 
 tfc = TFC()
 
-final, transition, vis = tfc.process_TFC('samples/dj1.ogg', 'samples/dj2.ogg', 1)
+final, transition, vis = tfc.process_TFC('samples/dj1.ogg', 'samples/dj2.ogg', 30)
 
 tfc.write_audio('final.wav', final)
 tfc.write_audio('transition.wav', transition)

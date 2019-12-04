@@ -7,6 +7,8 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg
 import io
 # from pathos.multiprocessing import ProcessingPool as Pool
 # import pyrubberband
+import numba
+from numba import jit
 
 class TFC:
     """
@@ -84,59 +86,44 @@ class TFC:
         :return:
         """
 
-        def simple_loss(a1, a2, b1, b2):
-            return np.linalg.norm([a1 - b1]) + np.linalg.norm([a2 - b2])
+        # def simple_loss(a1, a2, b1, b2):
+        #    return np.linalg.norm([a1 - b1]) + np.linalg.norm([a2 - b2])
 
-        if not loss:
-            loss = simple_loss
+        # if not loss:
+        #    loss = simple_loss
 
         graph = maxflow.Graph[float]()
         node_ids = graph.add_grid_nodes((y1ft.shape[0], y1ft.shape[1]))
 
-        # def calculate_row(row):
-        #     r = []
-        #
-        #     for x in range(y1ft.shape[1]):
-        #         if row != y1ft.shape[0] - 1:
-        #             row.append([node_ids[row, x],
-        #                         node_ids[row + 1, x],
-        #                         loss(y1ft[row, x], y1ft[row + 1, x], y2ft[row, x], y2ft[row + 1, x]),
-        #                         0])
-        #
-        #         if x != y1ft.shape[1] - 1:
-        #             row.append([node_ids[row, x],
-        #                         node_ids[row, x + 1],
-        #                         loss(y1ft[row, x], y1ft[row, x + 1], y2ft[row, x], y2ft[row, x + 1]),
-        #                         0])
-        #     return r
-        #
-        # pool = Pool(8)
-        #
-        # for row in range(y1ft.shape[0]):
-        #     graph.add_tedge(node_ids[row, 0], 999999, 0)
-        #     graph.add_tedge(node_ids[row, y1ft.shape[1] - 1], 0, 999999)
-        #
-        # nodes = pool.imap(calculate_row, list(range(y1ft.shape[0])))
-        #
-        # for node in nodes:
-        #     graph.add_edge(node[0], node[1], node[2], node[3])
+        @jit(nopython=True)
+        def compute_weights(node_ids, y1ft, y2ft):
+            edges = []
+
+            for row in range(y1ft.shape[0]):
+                for x in range(y1ft.shape[1]):
+                    if row != y1ft.shape[0] - 1:
+                        edges.append([
+                            node_ids[row, x],
+                            node_ids[row + 1, x],
+                            abs(y1ft[row, x] - y2ft[row, x]) + abs(y1ft[row + 1, x] - y2ft[row + 1, x]),
+                            0])
+
+                    if x != y1ft.shape[1] - 1:
+                        edges.append([
+                            node_ids[row, x],
+                            node_ids[row, x + 1],
+                            abs(y1ft[row, x] - y2ft[row, x]) + abs(y1ft[row, x + 1] - y2ft[row, x + 1]),
+                            0])
+            return edges
+
+        edges = compute_weights(node_ids, y1ft, y2ft)
 
         for row in range(y1ft.shape[0]):
-           graph.add_tedge(node_ids[row, 0], 999999, 0)
-           graph.add_tedge(node_ids[row, y1ft.shape[1] - 1], 0, 999999)
+            graph.add_tedge(node_ids[row, 0], 999999, 0)
+            graph.add_tedge(node_ids[row, y1ft.shape[1] - 1], 0, 999999)
 
-           for x in range(y1ft.shape[1]):
-               if row != y1ft.shape[0] - 1:
-                   graph.add_edge(
-                       node_ids[row, x],
-                       node_ids[row + 1, x],
-                       loss(y1ft[row, x], y1ft[row + 1, x], y2ft[row, x], y2ft[row + 1, x]), 0)
-
-               if x != y1ft.shape[1] - 1:
-                   graph.add_edge(
-                       node_ids[row, x],
-                       node_ids[row, x + 1],
-                       loss(y1ft[row, x], y1ft[row, x + 1], y2ft[row, x], y2ft[row, x + 1]), 0)
+        for edge in edges:
+            graph.add_edge(edge[0],edge[1],edge[2],edge[3])
 
         return graph, node_ids
 
